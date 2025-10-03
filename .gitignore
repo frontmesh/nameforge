@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache files
+.nameforge_cache.json
+
+# Test photos (optional - you might want to keep some for examples)
+testphotos/
+testphotos-*/
