@@ -1,8 +1,10 @@
-# 📸 NameForge
+# 📸 NameForge (`nf`)
 
 **Intelligent photo renaming tool with AI content analysis, GPS location resolution, and smart organization.**
 
-NameForge transforms your photo collection from generic filenames like `IMG_1234.jpg` into meaningful, contextual names like `2023-08-31_13-12-20_cozy_livingroom.jpg` using EXIF metadata, GPS coordinates, and AI-powered content analysis.
+NameForge transforms your photo collection from generic filenames like `IMG_1234.jpg` into meaningful, contextual names like `2023-08-31_cozy_livingroom.jpg` using EXIF metadata, GPS coordinates, and AI-powered content analysis.
+
+**Quick Start:** Use the convenient `nf` alias for faster commands!
 
 ## ✨ Features
 
@@ -49,24 +51,27 @@ cargo install --path .
 ### Basic Usage
 
 ```bash
-# Rename photos using GPS data (dry run)
-nameforge --input /path/to/photos --dry-run
+# Rename photos using GPS data (dry run) - uses date-only format by default
+nf --input /path/to/photos --dry-run
 
 # Actually rename the files
-nameforge --input /path/to/photos
+nf --input /path/to/photos
 
 # Organize into date folders
-nameforge --input /path/to/photos --organize-by-date
+nf --input /path/to/photos --organize-by-date
+
+# Use full timestamps if needed
+nf --input /path/to/photos --full-timestamp --dry-run
 ```
 
 ### AI Content Analysis
 
 ```bash
 # Enable AI content analysis
-nameforge --input /path/to/photos --ai-content --dry-run
+nf --input /path/to/photos --ai-content --dry-run
 
 # Customize AI parameters
-nameforge --input /path/to/photos --ai-content \
+nf --input /path/to/photos --ai-content \
   --ai-model llava:13b \
   --ai-max-chars 15 \
   --ai-case snake_case \
@@ -76,19 +81,20 @@ nameforge --input /path/to/photos --ai-content \
 ### Advanced Examples
 
 ```bash
-# Full-featured example
-nameforge --input ~/Pictures/Vacation2023 \
+# Full-featured example (date-only is default)
+nf --input ~/Pictures/Vacation2023 \
   --ai-content \
   --organize-by-date \
   --ai-case snake_case \
   --ai-max-chars 20 \
   --dry-run
 
-# Process with different AI model
-nameforge --input /path/to/photos \
+# Process with different AI model and full timestamps
+nf --input /path/to/photos \
   --ai-content \
   --ai-model llava-llama3 \
-  --ai-case camelCase
+  --ai-case camelCase \
+  --full-timestamp
 ```
 
 ## 🎛️ Options
@@ -98,6 +104,7 @@ nameforge --input /path/to/photos \
 | `--input` | Path to photo directory | Required |
 | `--dry-run` | Preview changes without applying | `false` |
 | `--organize-by-date` | Create date-based folder structure | `false` |
+| `--full-timestamp` | Use full timestamp instead of date-only | `false` |
 | `--ai-content` | Enable AI content analysis | `false` |
 | `--ai-model` | Ollama model to use | `llava:13b` |
 | `--ai-max-chars` | Maximum characters for AI filename | `20` |
@@ -115,15 +122,21 @@ nameforge --input /path/to/photos \
 
 ## 📋 Filename Format
 
-### Standard Format
+### Default Format (Date-Only)
+```
+YYYY-MM-DD_LocationOrContent.jpg
+```
+
+### Full Timestamp Format (with --full-timestamp)
 ```
 YYYY-MM-DD_HH-MM-SS_LocationOrContent.jpg
 ```
 
 ### Examples
-- `2023-08-31_13-12-20_Paris.jpg` (GPS-based)
-- `2023-08-31_21-48-55_cozy_livingroom.jpg` (AI-based)
-- `2023-09-15_09-30-45_sunset_beach.jpg` (AI with snake_case)
+- `2023-08-31_Paris.jpg` (GPS-based, default)
+- `2023-08-31_cozy_livingroom.jpg` (AI-based, default)
+- `2023-08-31_13-12-20_Paris.jpg` (GPS-based, with --full-timestamp)
+- `2023-09-15_sunset_beach.jpg` (AI with snake_case, default)
 
 ### With Date Organization
 ```

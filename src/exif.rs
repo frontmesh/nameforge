@@ -16,12 +16,13 @@ pub fn parse_gps_rational(field: Option<&Field>) -> Option<f64> {
     None
 }
 
-pub fn get_date_string(path: &Path, exif_opt: &Option<exif::Exif>) -> Option<String> {
+pub fn get_date_string(path: &Path, exif_opt: &Option<exif::Exif>, date_only: bool) -> Option<String> {
     if let Some(exif) = exif_opt {
         if let Some(field) = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY) {
             let date_str = field.display_value().with_unit(exif).to_string();
             if let Ok(date) = NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S") {
-                return Some(date.format("%Y-%m-%d_%H-%M-%S").to_string());
+                let format_str = if date_only { "%Y-%m-%d" } else { "%Y-%m-%d_%H-%M-%S" };
+                return Some(date.format(format_str).to_string());
             } else {
                 eprintln!("{} {}{}  {}", "⚠️".bright_yellow(), "Failed to parse EXIF date for ".bright_yellow(), path.display().to_string().bright_white(), "falling back to file modified time".bright_yellow());
             }
@@ -35,7 +36,8 @@ pub fn get_date_string(path: &Path, exif_opt: &Option<exif::Exif>) -> Option<Str
     let metadata = fs::metadata(path).ok()?;
     let modified = metadata.modified().ok()?;
     let dt: DateTime<Local> = modified.into();
-    Some(dt.format("%Y-%m-%d_%H-%M-%S").to_string())
+    let format_str = if date_only { "%Y-%m-%d" } else { "%Y-%m-%d_%H-%M-%S" };
+    Some(dt.format(format_str).to_string())
 }
 
 pub fn extract_gps_coordinates(exif: &exif::Exif) -> Option<(f64, f64)> {

@@ -37,6 +37,10 @@ struct Args {
     /// Language for AI-generated filename
     #[arg(long, default_value = "English")]
     ai_language: String,
+
+    /// Use full timestamp (YYYY-MM-DD_HH-MM-SS) instead of date only
+    #[arg(long, default_value_t = false)]
+    full_timestamp: bool,
 }
 
 fn main() {
@@ -54,6 +58,7 @@ fn main() {
         args.ai_max_chars,
         &args.ai_case,
         &args.ai_language,
+        !args.full_timestamp, // date_only is now the default
     );
 }
 
@@ -69,6 +74,8 @@ fn display_config(args: &Args) {
     // Organization settings
     println!("{}  {}", "📅 Date folders:".bright_green(), 
         if args.organize_by_date { "ENABLED".bright_green() } else { "DISABLED".bright_red() });
+    println!("{}    {}", "📆 Date format:".bright_green(), 
+        if args.full_timestamp { "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() } else { "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() });
     
     // AI settings
     if args.ai_content {

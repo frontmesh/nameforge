@@ -21,6 +21,7 @@ pub fn process_folder(
     ai_max_chars: u32,
     ai_case: &str,
     ai_language: &str,
+    date_only: bool,
 ) {
     let entries = match fs::read_dir(folder) {
         Ok(entries) => entries,
@@ -48,7 +49,8 @@ pub fn process_folder(
                     ai_model, 
                     ai_max_chars, 
                     ai_case, 
-                    ai_language
+                    ai_language,
+                    date_only,
                 ) {
                     if updated {
                         cache_updated = true;
@@ -99,9 +101,10 @@ fn build_new_name(
     ai_max_chars: u32,
     ai_case: &str,
     ai_language: &str,
+    date_only: bool,
 ) -> Option<(String, bool)> {
     let exif_opt = read_exif_data(path);
-    let date_fmt = get_date_string(path, &exif_opt)?;
+    let date_fmt = get_date_string(path, &exif_opt, date_only)?;
     let ext = path.extension()?.to_str().unwrap_or("jpg");
     let folder = path.parent()?;
 
