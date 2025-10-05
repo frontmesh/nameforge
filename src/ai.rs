@@ -1,8 +1,10 @@
-use std::{fs::File, io::Read, path::Path, time::Duration};
+use std::{path::Path, time::Duration};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use base64::{Engine as _, engine::general_purpose};
 use colored::*;
+use image::ImageFormat;
+use std::io::Cursor;
 
 #[derive(Serialize)]
 struct OllamaRequest {
@@ -23,29 +25,68 @@ fn apply_case_conversion(input: &str, case_style: &str) -> String {
         "camelcase" | "camel_case" => to_camel_case(input),
         "pascalcase" | "pascal_case" => to_pascal_case(input),
         "kebabcase" | "kebab_case" => to_kebab_case(input),
-        _ => input.to_string(), // Return as-is if unknown case style
+        "lowercase" => {
+            // For lowercase, still convert spaces/hyphens to underscores and make lowercase
+            input.chars().filter_map(|c| {
+                if c == ' ' || c == '-' {
+                    Some('_')
+                } else if c.is_ascii_alphanumeric() {
+                    Some(c.to_ascii_lowercase())
+                } else {
+                    // Skip other special characters
+                    None
+                }
+            }).collect::<String>()
+        },
+        "uppercase" => {
+            // For uppercase, convert spaces/hyphens to underscores and make uppercase
+            input.chars().filter_map(|c| {
+                if c == ' ' || c == '-' {
+                    Some('_')
+                } else if c.is_ascii_alphanumeric() {
+                    Some(c.to_ascii_uppercase())
+                } else {
+                    // Skip other special characters
+                    None
+                }
+            }).collect::<String>()
+        },
+        _ => to_snake_case(input), // Default to snake_case for unknown styles
     }
 }
 
 fn to_snake_case(input: &str) -> String {
     let mut result = String::new();
     let mut prev_was_upper = false;
+    let mut prev_was_separator = false;
     
     for (i, ch) in input.chars().enumerate() {
         if ch.is_ascii_uppercase() {
-            if i > 0 && !prev_was_upper {
+            // Add underscore before uppercase letter if previous wasn't uppercase and we're not at start
+            if i > 0 && !prev_was_upper && !prev_was_separator {
                 result.push('_');
             }
             result.push(ch.to_ascii_lowercase());
             prev_was_upper = true;
+            prev_was_separator = false;
         } else if ch.is_ascii_alphanumeric() {
             result.push(ch);
             prev_was_upper = false;
-        } else if ch == ' ' || ch == '-' {
-            result.push('_');
+            prev_was_separator = false;
+        } else if ch == ' ' || ch == '-' || ch == '_' {
+            // Only add underscore if the last character wasn't already a separator
+            if !prev_was_separator && !result.is_empty() {
+                result.push('_');
+            }
             prev_was_upper = false;
+            prev_was_separator = true;
         }
         // Skip other special characters
+    }
+    
+    // Remove trailing underscore if present
+    if result.ends_with('_') {
+        result.pop();
     }
     
     result
@@ -90,6 +131,41 @@ fn to_kebab_case(input: &str) -> String {
     to_snake_case(input).replace('_', "-")
 }
 
+/// Resize image to reduce memory usage while maintaining aspect ratio
+fn resize_image_for_ai(image_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Open and decode the image
+    let img = image::open(image_path)?;
+    
+    // Calculate new dimensions (max 1024px on longest side)
+    let max_size = 1024;
+    let (width, height) = (img.width(), img.height());
+    let (new_width, new_height) = if width > height {
+        if width > max_size {
+            let ratio = max_size as f32 / width as f32;
+            (max_size, (height as f32 * ratio) as u32)
+        } else {
+            (width, height)
+        }
+    } else {
+        if height > max_size {
+            let ratio = max_size as f32 / height as f32;
+            ((width as f32 * ratio) as u32, max_size)
+        } else {
+            (width, height)
+        }
+    };
+    
+    // Resize the image
+    let resized = img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3);
+    
+    // Encode to JPEG with reduced quality
+    let mut buffer = Vec::new();
+    let mut cursor = Cursor::new(&mut buffer);
+    resized.write_to(&mut cursor, ImageFormat::Jpeg)?;
+    
+    Ok(buffer)
+}
+
 pub fn get_ai_content_name(
     image_path: &Path,
     model: &str,
@@ -97,16 +173,29 @@ pub fn get_ai_content_name(
     case: &str,
     language: &str,
 ) -> Option<String> {
-    // Read and encode the image
-    let mut file = File::open(image_path).ok()?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).ok()?;
+    // Resize and encode the image to reduce memory usage
+    println!("{}  {}{}", "🖼️".bright_blue(), "Resizing image for AI processing...".bright_blue(), "");
+    let buffer = match resize_image_for_ai(image_path) {
+        Ok(buf) => buf,
+        Err(e) => {
+            let error_msg = e.to_string();
+            if error_msg.contains("invalid JPEG format") || error_msg.contains("Format error") {
+                eprintln!("{} {}{}{}", "⚠️".bright_yellow(), "Skipping invalid/corrupted image file: ".bright_yellow(), image_path.display().to_string().bright_white(), " (not a valid image format)".bright_yellow());
+            } else {
+                eprintln!("{} {}{}", "❌".bright_red(), "Failed to resize image: ".bright_red(), error_msg.bright_white());
+            }
+            return None;
+        }
+    };
     let base64_image = general_purpose::STANDARD.encode(&buffer);
     
     // Build the prompt according to specification
     let prompt = format!(
-        "Generate filename:\n\nUse {}\nMax {} characters\n{} only\nNo file extension\nNo special chars\nOnly key elements\nOne word if possible\nNoun-verb format\n\nRespond ONLY with filename.",
-        case, max_chars, language
+        "Look at this image and generate a descriptive filename.\n\nRules:\n- Use {} case format{}\n- Maximum {} characters\n- {} language only\n- No file extension\n- No special characters except underscores\n- Describe the main subject/action\n- Be concise and specific\n\nRespond with ONLY the filename, nothing else.",
+        case, 
+        if case.to_lowercase().contains("snake") { " (separate_words_with_underscores)" } else { "" },
+        max_chars, 
+        language
     );
     
     // Make request to Ollama with timeout and retry
@@ -186,4 +275,38 @@ pub fn get_ai_content_name(
         eprintln!("{} {}{}", "❌".bright_red(), "Failed to send request to Ollama after 2 attempts: ".bright_red(), e.to_string().bright_white());
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_snake_case() {
+        assert_eq!(to_snake_case("cat on carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("CatOnCarpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("catOnCarpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("cat-on-carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("cat_on_carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("CAT ON CARPET"), "cat_on_carpet");
+        assert_eq!(to_snake_case("cat  on   carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("cat--on--carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("cat__on__carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("Cat On Carpet"), "cat_on_carpet");
+        assert_eq!(to_snake_case("catoncarpet"), "catoncarpet");
+        assert_eq!(to_snake_case("CATONCARPET"), "catoncarpet");
+    }
+
+    #[test]
+    fn test_apply_case_conversion() {
+        assert_eq!(apply_case_conversion("cat on carpet", "snake_case"), "cat_on_carpet");
+        assert_eq!(apply_case_conversion("cat on carpet", "snakecase"), "cat_on_carpet");
+        assert_eq!(apply_case_conversion("cat on carpet", "lowercase"), "cat_on_carpet");
+        assert_eq!(apply_case_conversion("cat on carpet", "uppercase"), "CAT_ON_CARPET");
+        assert_eq!(apply_case_conversion("cat on carpet", "camelcase"), "catOnCarpet");
+        assert_eq!(apply_case_conversion("cat on carpet", "pascalcase"), "CatOnCarpet");
+        assert_eq!(apply_case_conversion("cat on carpet", "kebabcase"), "cat-on-carpet");
+        // Unknown case should default to snake_case
+        assert_eq!(apply_case_conversion("cat on carpet", "unknown"), "cat_on_carpet");
+    }
 }

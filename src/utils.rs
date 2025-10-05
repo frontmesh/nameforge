@@ -10,10 +10,23 @@ pub fn create_date_folder_path(base_folder: &Path, new_filename: &str) -> std::p
 }
 
 pub fn unique_filename(folder: &Path, base_name: &str, ext: &str) -> Option<String> {
-    let mut filename = format!("{}.{}", base_name, ext);
+    // Check if base_name already ends with the extension to avoid double extensions
+    let filename_base = if base_name.ends_with(&format!(".{}", ext)) {
+        base_name.to_string()
+    } else {
+        format!("{}.{}", base_name, ext)
+    };
+    
+    let mut filename = filename_base.clone();
     let mut counter = 1;
     while folder.join(&filename).exists() {
-        filename = format!("{}_{}.{}", base_name, counter, ext);
+        if base_name.ends_with(&format!(".{}", ext)) {
+            // If base_name already has extension, insert counter before extension
+            let stem = base_name.trim_end_matches(&format!(".{}", ext));
+            filename = format!("{}_{}.{}", stem, counter, ext);
+        } else {
+            filename = format!("{}_{}.{}", base_name, counter, ext);
+        }
         counter += 1;
     }
     Some(filename)
