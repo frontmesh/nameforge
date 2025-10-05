@@ -16,11 +16,42 @@ pub fn parse_gps_rational(field: Option<&Field>) -> Option<f64> {
     None
 }
 
-pub fn get_date_string(path: &Path, exif_opt: &Option<exif::Exif>, date_only: bool) -> Option<String> {
+pub fn get_date_string(path: &Path, exif_opt: &Option<exif::Exif>, date_only: bool, use_file_date: bool, prefer_modified: bool) -> Option<String> {
+    // If use_file_date is true, prioritize file system date
+    if use_file_date {
+        let metadata = fs::metadata(path).ok()?;
+        
+        // Choose between creation and modified time based on preference
+        let file_time = if prefer_modified {
+            // Prefer modified time, fall back to creation time
+            if let Ok(modified) = metadata.modified() {
+                modified
+            } else {
+                metadata.created().ok()?
+            }
+        } else {
+            // Prefer creation time (default), fall back to modified time
+            if let Ok(created) = metadata.created() {
+                created
+            } else {
+                metadata.modified().ok()?
+            }
+        };
+        
+        let dt: DateTime<Local> = file_time.into();
+        let format_str = if date_only { "%Y-%m-%d" } else { "%Y-%m-%d_%H-%M-%S" };
+        return Some(dt.format(format_str).to_string());
+    }
+    
+    // Otherwise, try EXIF date first (original behavior)
     if let Some(exif) = exif_opt {
         if let Some(field) = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY) {
             let date_str = field.display_value().with_unit(exif).to_string();
-            if let Ok(date) = NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S") {
+            // Try both possible formats
+            let date = NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S")
+                .or_else(|_| NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S"));
+            
+            if let Ok(date) = date {
                 let format_str = if date_only { "%Y-%m-%d" } else { "%Y-%m-%d_%H-%M-%S" };
                 return Some(date.format(format_str).to_string());
             } else {
@@ -33,9 +64,27 @@ pub fn get_date_string(path: &Path, exif_opt: &Option<exif::Exif>, date_only: bo
         eprintln!("{} {}{}  {}", "⚠️".bright_yellow(), "No EXIF data for ".bright_yellow(), path.display().to_string().bright_white(), "falling back to file modified time".bright_yellow());
     }
 
+    // Fallback to file system date
     let metadata = fs::metadata(path).ok()?;
-    let modified = metadata.modified().ok()?;
-    let dt: DateTime<Local> = modified.into();
+    
+    // Choose between creation and modified time based on preference
+    let file_time = if prefer_modified {
+        // Prefer modified time, fall back to creation time
+        if let Ok(modified) = metadata.modified() {
+            modified
+        } else {
+            metadata.created().ok()?
+        }
+    } else {
+        // Prefer creation time (default), fall back to modified time
+        if let Ok(created) = metadata.created() {
+            created
+        } else {
+            metadata.modified().ok()?
+        }
+    };
+    
+    let dt: DateTime<Local> = file_time.into();
     let format_str = if date_only { "%Y-%m-%d" } else { "%Y-%m-%d_%H-%M-%S" };
     Some(dt.format(format_str).to_string())
 }

@@ -60,6 +60,9 @@ pub fn process_folder(
     ai_language: &str,
     date_only: bool,
     max_images: Option<usize>,
+    use_file_date: bool,
+    prefer_modified: bool,
+    no_date: bool,
 ) {
     // Collect all valid image files first to avoid issues with directory modification during iteration
     let mut image_files = Vec::new();
@@ -124,6 +127,9 @@ pub fn process_folder(
             ai_case, 
             ai_language,
             date_only,
+            use_file_date,
+            prefer_modified,
+            no_date,
         ) {
             if updated {
                 cache_updated = true;
@@ -176,9 +182,16 @@ fn build_new_name(
     ai_case: &str,
     ai_language: &str,
     date_only: bool,
+    use_file_date: bool,
+    prefer_modified: bool,
+    no_date: bool,
 ) -> Option<(String, bool)> {
     let exif_opt = read_exif_data(path);
-    let date_fmt = get_date_string(path, &exif_opt, date_only)?;
+    let date_fmt = if no_date {
+        None
+    } else {
+        get_date_string(path, &exif_opt, date_only, use_file_date, prefer_modified)
+    };
     let ext = path.extension()?.to_str().unwrap_or("jpg");
     let folder = path.parent()?;
 
@@ -210,7 +223,11 @@ fn build_new_name(
         place.clone()
     };
     
-    let base_name = format!("{}_{}", date_fmt, content_part);
+    let base_name = if let Some(date) = date_fmt {
+        format!("{}_{}", date, content_part)
+    } else {
+        content_part
+    };
     
     unique_filename(folder, &base_name, ext).map(|name| (name, gps_cache_updated))
 }

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use clap::{Parser, Subcommand};
 use colored::*;
 
@@ -44,6 +45,40 @@ struct Args {
     /// Use full timestamp (YYYY-MM-DD_HH-MM-SS) instead of date only
     #[arg(long, default_value_t = false, global = true)]
     full_timestamp: bool,
+
+    /// Use file system date instead of EXIF date for filename
+    #[arg(short = 'f', long, default_value_t = false, global = true)]
+    use_file_date: bool,
+
+    /// When using file date (-f), prefer modified time over creation time
+    #[arg(short = 'M', long, default_value_t = false, global = true)]
+    prefer_modified: bool,
+
+    /// Skip date prefix in filename (use only AI-generated name)
+    #[arg(short = 'n', long, default_value_t = false, global = true)]
+    no_date: bool,
+}
+
+fn format_duration(duration: Duration) -> String {
+    let total_secs = duration.as_secs();
+    let millis = duration.subsec_millis();
+    
+    if total_secs >= 60 {
+        let mins = total_secs / 60;
+        let secs = total_secs % 60;
+        format!("{}m {}s", mins, secs)
+    } else if total_secs > 0 {
+        format!("{}.{:03}s", total_secs, millis)
+    } else {
+        format!("{}ms", millis)
+    }
+}
+
+fn display_completion_time(start_time: Instant) {
+    let duration = start_time.elapsed();
+    println!("{}", "─".repeat(50).bright_black());
+    println!("{}  {}{}", "⏱️".bright_cyan(), "Completed in: ".bright_cyan(), format_duration(duration).bright_white().bold());
+    println!();
 }
 
 #[derive(Subcommand, Debug)]
@@ -61,6 +96,7 @@ enum Commands {
 }
 
 fn main() {
+    let start_time = Instant::now();
     let args = Args::parse();
 
     match &args.command {
@@ -78,7 +114,12 @@ fn main() {
                 &args.ai_language,
                 !args.full_timestamp,
                 *max_images, // Pass the optional max_images limit
+                args.use_file_date,
+                args.prefer_modified,
+                args.no_date,
             );
+            
+            display_completion_time(start_time);
         }
         None => {
             // Default processing - require input argument
@@ -95,7 +136,12 @@ fn main() {
                 &args.ai_language,
                 !args.full_timestamp,
                 None, // No limit for default processing
+                args.use_file_date,
+                args.prefer_modified,
+                args.no_date,
             );
+            
+            display_completion_time(start_time);
         }
     }
 }
@@ -114,6 +160,14 @@ fn display_config(args: &Args, input: &std::path::Path) {
         if args.organize_by_date { "ENABLED".bright_green() } else { "DISABLED".bright_red() });
     println!("{}    {}", "📆 Date format:".bright_green(), 
         if args.full_timestamp { "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() } else { "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() });
+    if args.no_date {
+        println!("{}   {}", "📅 Date source:".bright_green(), "DISABLED".bright_red().bold());
+    } else {
+        println!("{}   {}", "📅 Date source:".bright_green(), 
+            if args.use_file_date { 
+                if args.prefer_modified { "FILE MODIFIED".bright_green().bold() } else { "FILE CREATION".bright_green().bold() }
+            } else { "EXIF DATA".bright_cyan().bold() });
+    }
     
     // AI settings
     if args.ai_content {
@@ -150,6 +204,14 @@ fn display_prompt_config(args: &Args, input: &std::path::Path, max_images: Optio
         if args.organize_by_date { "ENABLED".bright_green() } else { "DISABLED".bright_red() });
     println!("{}    {}", "📆 Date format:".bright_green(), 
         if args.full_timestamp { "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() } else { "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() });
+    if args.no_date {
+        println!("{}   {}", "📅 Date source:".bright_green(), "DISABLED".bright_red().bold());
+    } else {
+        println!("{}   {}", "📅 Date source:".bright_green(), 
+            if args.use_file_date { 
+                if args.prefer_modified { "FILE MODIFIED".bright_green().bold() } else { "FILE CREATION".bright_green().bold() }
+            } else { "EXIF DATA".bright_cyan().bold() });
+    }
     
     // AI settings (always enabled for prompt mode)
     println!("{} {}", "🤖 AI Analysis:".bright_green(), "ENABLED".bright_green().bold());
