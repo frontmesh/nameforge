@@ -50,7 +50,7 @@ fn is_valid_image_file(image_path: &Path) -> bool {
 }
 
 pub fn process_folder(
-    folder: &Path, 
+    input_path: &Path, 
     dry_run: bool, 
     organize_by_date: bool,
     ai_content: bool,
@@ -64,40 +64,51 @@ pub fn process_folder(
     prefer_modified: bool,
     no_date: bool,
 ) {
-    // Collect all valid image files first to avoid issues with directory modification during iteration
-    let mut image_files = Vec::new();
+    /// Helper function to check if a file is a valid image file
+    fn is_valid_image(path: &Path) -> bool {
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(is_supported_image_extension)
+            .unwrap_or(false) && is_valid_image_file(path)
+    }
     
-    let entries = match fs::read_dir(folder) {
-        Ok(entries) => entries,
-        Err(e) => {
-            eprintln!("Could not open folder {:?}: {}", folder, e);
+    /// Helper function to filter out macOS resource fork files
+    fn is_not_resource_fork(path: &Path) -> bool {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| !name.starts_with("._"))
+            .unwrap_or(true)
+    }
+    
+    // Collect all valid image files using functional approach
+    let image_files: Vec<_> = if input_path.is_file() {
+        // Process a single file
+        if is_valid_image(input_path) {
+            vec![input_path.to_path_buf()]
+        } else {
+            eprintln!("{} {}{}", "❌".bright_red(), "Not a valid image file: ".bright_red(), input_path.display().to_string().bright_white());
             return;
         }
-    };
-    
-    // First pass: collect all valid image files
-    for entry in entries {
-        let entry = entry.unwrap();
-        let path = entry.path();
-
-        if let Some(ext) = path.extension() {
-            if let Some(ext_str) = ext.to_str() {
-                // Skip macOS resource fork files (._filename)
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if filename.starts_with("._") {
-                        continue; // Skip resource fork files
-                    }
-                }
-                
-                if is_supported_image_extension(ext_str) {
-                    // Validate that it's actually a valid image file
-                    if is_valid_image_file(&path) {
-                        image_files.push(path);
-                    }
-                }
+    } else if input_path.is_dir() {
+        // Process directory using functional approach
+        match fs::read_dir(input_path) {
+            Ok(entries) => {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .filter(|path| is_not_resource_fork(path))
+                    .filter(|path| is_valid_image(path))
+                    .collect()
+            },
+            Err(e) => {
+                eprintln!("Could not open folder {:?}: {}", input_path, e);
+                return;
             }
         }
-    }
+    } else {
+        eprintln!("{} {}{}", "❌".bright_red(), "Input path does not exist or is not accessible: ".bright_red(), input_path.display().to_string().bright_white());
+        return;
+    };
     
     let total_files = image_files.len();
     println!("{}  {}{}{}", "📊".bright_blue(), "Found ".bright_blue(), total_files.to_string().bright_white().bold(), " valid image files to process".bright_blue());
@@ -135,8 +146,14 @@ pub fn process_folder(
                 cache_updated = true;
             }
             
+            let base_folder = if input_path.is_dir() {
+                input_path
+            } else {
+                input_path.parent().unwrap_or(Path::new("."))
+            };
+            
             let new_path = if organize_by_date {
-                create_date_folder_path(folder, &new_name)
+                create_date_folder_path(base_folder, &new_name)
             } else {
                 path.with_file_name(new_name)
             };
@@ -215,8 +232,14 @@ fn build_new_name(
         match get_ai_content_name(path, ai_model, ai_max_chars, ai_case, ai_language) {
             Some(ai_name) => ai_name,
             None => {
-                eprintln!("{} {}{}  {}", "⚠️".bright_yellow(), "Failed to get AI content analysis for ".bright_yellow(), path.display().to_string().bright_white(), "using 'Content' fallback".bright_yellow());
-                "Content".to_string()
+                // Generate a fallback timestamp when AI analysis fails
+                let fallback_date = get_date_string(path, &exif_opt, false, use_file_date, prefer_modified)
+                    .unwrap_or_else(|| {
+                        use chrono::Local;
+                        Local::now().format("%Y-%m-%d_%H-%M-%S").to_string()
+                    });
+                eprintln!("{} {}{}  {}{}", "⚠️".bright_yellow(), "Failed to get AI content analysis for ".bright_yellow(), path.display().to_string().bright_white(), "using date fallback: ".bright_yellow(), fallback_date.bright_white());
+                fallback_date
             }
         }
     } else {
