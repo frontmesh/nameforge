@@ -146,30 +146,42 @@ fn main() {
     }
 }
 
-fn display_config(args: &Args, input: &std::path::Path) {
-    println!("{}", "📸 NameForge Configuration".bright_cyan().bold());
-    println!("{}", "─".repeat(50).bright_black());
-    
-    // Input settings
-    println!("{}  {}", "📁 Input folder:".bright_green(), input.display().to_string().bright_white());
-    println!("{}   {}", "🔧 Mode:".bright_green(), 
-        if args.dry_run { "DRY RUN".bright_yellow().bold() } else { "LIVE".bright_red().bold() });
-    
-    // Organization settings
-    println!("{}  {}", "📅 Date folders:".bright_green(), 
-        if args.organize_by_date { "ENABLED".bright_green() } else { "DISABLED".bright_red() });
-    println!("{}    {}", "📆 Date format:".bright_green(), 
-        if args.full_timestamp { "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() } else { "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() });
-    if args.no_date {
-        println!("{}   {}", "📅 Date source:".bright_green(), "DISABLED".bright_red().bold());
-    } else {
-        println!("{}   {}", "📅 Date source:".bright_green(), 
-            if args.use_file_date { 
-                if args.prefer_modified { "FILE MODIFIED".bright_green().bold() } else { "FILE CREATION".bright_green().bold() }
-            } else { "EXIF DATA".bright_cyan().bold() });
+/// Helper function to display mode status
+fn display_mode(dry_run: bool) -> colored::ColoredString {
+    if dry_run { "DRY RUN".bright_yellow().bold() } else { "LIVE".bright_red().bold() }
+}
+
+/// Helper function to display enabled/disabled status
+fn display_enabled_status(enabled: bool) -> colored::ColoredString {
+    if enabled { "ENABLED".bright_green() } else { "DISABLED".bright_red() }
+}
+
+/// Helper function to display date format
+fn display_date_format(full_timestamp: bool) -> colored::ColoredString {
+    if full_timestamp { 
+        "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() 
+    } else { 
+        "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() 
     }
-    
-    // AI settings
+}
+
+/// Helper function to display date source
+fn display_date_source(args: &Args) -> colored::ColoredString {
+    if args.no_date {
+        "DISABLED".bright_red().bold()
+    } else if args.use_file_date {
+        if args.prefer_modified {
+            "FILE MODIFIED".bright_green().bold()
+        } else {
+            "FILE CREATION".bright_green().bold()
+        }
+    } else {
+        "EXIF DATA".bright_cyan().bold()
+    }
+}
+
+/// Helper function to display AI settings
+fn display_ai_settings(args: &Args) {
     if args.ai_content {
         println!("{}      {}", "🤖 AI Analysis:".bright_green(), "ENABLED".bright_green().bold());
         println!("{}        {}", "   Model:".bright_blue(), args.ai_model.bright_white());
@@ -180,45 +192,52 @@ fn display_config(args: &Args, input: &std::path::Path) {
         println!("{}      {}", "🤖 AI Analysis:".bright_green(), "DISABLED".bright_red());
         println!("{}     {}", "   Using GPS location data instead".bright_black(), "");
     }
+}
+
+/// Helper function to display common configuration settings
+fn display_common_config(args: &Args, input: &std::path::Path) {
+    println!("{}  {}", "📁 Input folder:".bright_green(), input.display().to_string().bright_white());
+    println!("{}   {}", "🔧 Mode:".bright_green(), display_mode(args.dry_run));
+    println!("{}  {}", "📅 Date folders:".bright_green(), display_enabled_status(args.organize_by_date));
+    println!("{}    {}", "📆 Date format:".bright_green(), display_date_format(args.full_timestamp));
+    println!("{}   {}", "📅 Date source:".bright_green(), display_date_source(args));
+}
+
+fn display_config(args: &Args, input: &std::path::Path) {
+    println!("{}", "📸 NameForge Configuration".bright_cyan().bold());
+    println!("{}", "─".repeat(50).bright_black());
+    
+    display_common_config(args, input);
+    display_ai_settings(args);
     
     println!("{}", "─".repeat(50).bright_black());
     println!();
+}
+
+/// Helper function to display max images setting
+fn display_max_images(max_images: Option<usize>) -> colored::ColoredString {
+    match max_images {
+        Some(n) => n.to_string().bright_cyan().bold(),
+        None => "ALL".bright_green().bold()
+    }
+}
+
+/// Helper function to display AI settings for prompt mode (always enabled)
+fn display_prompt_ai_settings(args: &Args) {
+    println!("{} {}", "🤖 AI Analysis:".bright_green(), "ENABLED".bright_green().bold());
+    println!("{} {}", "   Model:".bright_blue(), args.ai_model.bright_white());
+    println!("{} {}", "   Max chars:".bright_blue(), args.ai_max_chars.to_string().bright_white());
+    println!("{} {}", "   Case:".bright_blue(), args.ai_case.bright_white());
+    println!("{} {}", "   Language:".bright_blue(), args.ai_language.bright_white());
 }
 
 fn display_prompt_config(args: &Args, input: &std::path::Path, max_images: Option<usize>) {
     println!("{}", "🤖 NameForge - Prompt Mode".bright_magenta().bold());
     println!("{}", "─".repeat(50).bright_black());
     
-    // Input settings
-    println!("{}  {}", "📁 Input folder:".bright_green(), input.display().to_string().bright_white());
-    println!("{}   {}", "🔧 Mode:".bright_green(), 
-        if args.dry_run { "DRY RUN".bright_yellow().bold() } else { "LIVE".bright_red().bold() });
-    println!("{}  {}", "🎯 Max images:".bright_green(), 
-        match max_images {
-            Some(n) => n.to_string().bright_cyan().bold(),
-            None => "ALL".bright_green().bold()
-        });
-    
-    // Organization settings
-    println!("{}  {}", "📅 Date folders:".bright_green(), 
-        if args.organize_by_date { "ENABLED".bright_green() } else { "DISABLED".bright_red() });
-    println!("{}    {}", "📆 Date format:".bright_green(), 
-        if args.full_timestamp { "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() } else { "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() });
-    if args.no_date {
-        println!("{}   {}", "📅 Date source:".bright_green(), "DISABLED".bright_red().bold());
-    } else {
-        println!("{}   {}", "📅 Date source:".bright_green(), 
-            if args.use_file_date { 
-                if args.prefer_modified { "FILE MODIFIED".bright_green().bold() } else { "FILE CREATION".bright_green().bold() }
-            } else { "EXIF DATA".bright_cyan().bold() });
-    }
-    
-    // AI settings (always enabled for prompt mode)
-    println!("{} {}", "🤖 AI Analysis:".bright_green(), "ENABLED".bright_green().bold());
-    println!("{} {}", "   Model:".bright_blue(), args.ai_model.bright_white());
-    println!("{} {}", "   Max chars:".bright_blue(), args.ai_max_chars.to_string().bright_white());
-    println!("{} {}", "   Case:".bright_blue(), args.ai_case.bright_white());
-    println!("{} {}", "   Language:".bright_blue(), args.ai_language.bright_white());
+    display_common_config(args, input);
+    println!("{}  {}", "🎯 Max images:".bright_green(), display_max_images(max_images));
+    display_prompt_ai_settings(args);
     
     println!("{}", "─".repeat(50).bright_black());
     println!();

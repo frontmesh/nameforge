@@ -16,33 +16,36 @@ impl GPSCache {
     }
 
     fn get_cache_file_path() -> Option<PathBuf> {
-        let home_dir = std::env::var("HOME").ok()?;
-        Some(PathBuf::from(home_dir).join(".nameforge_cache.json"))
+        std::env::var("HOME")
+            .ok()
+            .map(|home| PathBuf::from(home).join(".nameforge_cache.json"))
     }
 
     pub fn load() -> Self {
-        if let Some(cache_path) = Self::get_cache_file_path() {
-            if cache_path.exists() {
-                if let Ok(file) = File::open(&cache_path) {
-                    if let Ok(cache) = serde_json::from_reader::<_, GPSCache>(BufReader::new(file)) {
-                        println!("{}  {}{}", "💾".bright_green(), "Loaded GPS cache with ".bright_green(), format!("{} entries", cache.cache.len()).bright_white().bold());
-                        return cache;
-                    }
-                }
+        let cache = Self::get_cache_file_path()
+            .filter(|path| path.exists())
+            .and_then(|path| File::open(&path).ok())
+            .map(BufReader::new)
+            .and_then(|reader| serde_json::from_reader::<_, GPSCache>(reader).ok());
+            
+        match cache {
+            Some(loaded_cache) => {
+                println!("{}  {}{}", "💾".bright_green(), "Loaded GPS cache with ".bright_green(), format!("{} entries", loaded_cache.cache.len()).bright_white().bold());
+                loaded_cache
             }
+            None => GPSCache::new()
         }
-        GPSCache::new()
     }
 
     pub fn save(&self) {
-        if let Some(cache_path) = Self::get_cache_file_path() {
-            if let Ok(file) = File::create(&cache_path) {
-                if let Err(e) = serde_json::to_writer_pretty(BufWriter::new(file), &self) {
-                    eprintln!("{} {}{}", "❌".bright_red(), "Failed to save GPS cache: ".bright_red(), e.to_string().bright_white());
-                } else {
-                    println!("{}  {}{}", "💾".bright_green(), "Saved GPS cache with ".bright_green(), format!("{} entries", self.cache.len()).bright_white().bold());
-                }
-            }
+        let result = Self::get_cache_file_path()
+            .and_then(|path| File::create(&path).ok())
+            .map(BufWriter::new)
+            .and_then(|writer| serde_json::to_writer_pretty(writer, &self).ok());
+            
+        match result {
+            Some(_) => println!("{}  {}{}", "💾".bright_green(), "Saved GPS cache with ".bright_green(), format!("{} entries", self.cache.len()).bright_white().bold()),
+            None => eprintln!("{} {}", "❌".bright_red(), "Failed to save GPS cache".bright_red())
         }
     }
 

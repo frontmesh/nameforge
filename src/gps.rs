@@ -17,32 +17,59 @@ pub fn to_cache_key(lat: f64, lon: f64) -> String {
     format!("{}_{}", lat_i, lon_i)
 }
 
+/// Helper function to build Nominatim API URL
+fn build_nominatim_url(lat: f64, lon: f64) -> String {
+    format!(
+        "https://nominatim.openstreetmap.org/reverse?format=json&lat={}&lon={}&zoom=10&addressdetails=0",
+        lat, lon
+    )
+}
+
+/// Helper function to extract place name from Nominatim response
+fn extract_place_name(display_name: &str) -> String {
+    display_name
+        .split(',')
+        .next()
+        .unwrap_or("UnknownPlace")
+        .trim()
+        .replace(' ', "_")
+}
+
+/// Helper function to perform API request and extract place
+fn fetch_place_from_api(lat: f64, lon: f64) -> Option<String> {
+    println!(
+        "{}  {}({}, {})...",
+        "🌍".bright_blue(),
+        "Resolving GPS coordinates ".bright_blue(),
+        lat.to_string().bright_white(),
+        lon.to_string().bright_white()
+    );
+    
+    let client = Client::new();
+    let url = build_nominatim_url(lat, lon);
+    
+    client
+        .get(&url)
+        .header("User-Agent", "nameforge/1.0")
+        .send()
+        .ok()
+        .and_then(|resp| resp.json::<NominatimResponse>().ok())
+        .map(|nominatim| extract_place_name(&nominatim.display_name))
+}
+
 pub fn gps_to_place(lat: f64, lon: f64, cache: &mut GPSCache) -> (Option<String>, bool) {
     let key = to_cache_key(lat, lon);
+    
+    // Check cache first
     if let Some(place) = cache.get(&key) {
-        return (Some(place.clone()), false); // Found in cache, no update
+        return (Some(place.clone()), false);
     }
     
-    println!("{}  {}({}, {})...", "🌍".bright_blue(), "Resolving GPS coordinates ".bright_blue(), lat.to_string().bright_white(), lon.to_string().bright_white());
-    let client = Client::new();
-    let url = format!(
-        "https://nominatim.openstreetmap.org/reverse?format=json&lat={}&lon={}&zoom=10&addressdetails=0", 
-        lat, lon
-    );
-    let resp = client.get(&url)
-        .header("User-Agent", "nameforge/1.0")
-        .send().ok();
+    // Try API request, fallback to "UnknownPlace" if it fails
+    let place = fetch_place_from_api(lat, lon)
+        .unwrap_or_else(|| "UnknownPlace".to_string());
     
-    if let Some(resp) = resp {
-        if let Ok(nominatim) = resp.json::<NominatimResponse>() {
-            let place = nominatim.display_name.split(',').next().unwrap_or("UnknownPlace").trim().replace(' ', "_");
-            cache.insert(key, place.clone());
-            return (Some(place), true); // New lookup, cache updated
-        }
-    }
-    
-    // API call failed, cache a fallback
-    let fallback = "UnknownPlace".to_string();
-    cache.insert(key, fallback.clone());
-    (Some(fallback), true)
+    // Cache the result (whether successful or fallback)
+    cache.insert(key, place.clone());
+    (Some(place), true)
 }
