@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: NameForge ${{ github.ref }}
+          body: |
+            ## 📸 NameForge ${{ github.ref }}
+            
+            Intelligent photo renaming tool with AI content analysis and GPS location resolution.
+            
+            ### 🚀 Installation Options
+            
+            #### 📦 From Binary (Recommended)
+            Download the appropriate binary for your platform from the assets below.
+            
+            #### 🍺 Homebrew (macOS/Linux)
+            ```bash
+            brew install nameforge
+            ```
+            
+            #### 🦀 From Cargo
+            ```bash
+            cargo install nameforge
+            ```
+            
+            ### 📋 What's New
+            - Check the commit history for detailed changes
+            
+            ### 🐛 Bug Reports
+            Please report any issues on the [GitHub Issues](https://github.com/frontmesh/nameforge/issues) page.
+          draft: false
+          prerelease: false
+
+  build-and-upload:
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset_name: nameforge-x86_64-unknown-linux-gnu.tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            asset_name: nameforge-x86_64-unknown-linux-musl.tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            asset_name: nameforge-x86_64-apple-darwin.tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset_name: nameforge-aarch64-apple-darwin.tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_name: nameforge-x86_64-pc-windows-msvc.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Install musl tools (Linux musl only)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.target }}
+
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p release
+          cp target/${{ matrix.target }}/release/nameforge release/
+          cp target/${{ matrix.target }}/release/nf release/
+          cp README.md release/
+          cp LICENSE-MIT release/
+          cp LICENSE-APACHE release/
+          tar -czvf ${{ matrix.asset_name }} -C release .
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir release
+          cp target/${{ matrix.target }}/release/nameforge.exe release/
+          cp target/${{ matrix.target }}/release/nf.exe release/
+          cp README.md release/
+          cp LICENSE-MIT release/
+          cp LICENSE-APACHE release/
+          Compress-Archive -Path release/* -DestinationPath ${{ matrix.asset_name }}
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ matrix.asset_name }}
+          asset_name: ${{ matrix.asset_name }}
+          asset_content_type: application/octet-stream
+
+  publish-crate:
+    runs-on: ubuntu-latest
+    needs: [create-release, build-and-upload]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --token $CARGO_REGISTRY_TOKEN

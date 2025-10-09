@@ -19,32 +19,86 @@ NameForge transforms your photo collection from generic filenames like `IMG_1234
 
 ## 🚀 Installation
 
-### Prerequisites
+### 📦 Option 1: Download Pre-built Binary (Recommended)
 
-- **Rust** (1.70 or later)
+Download the latest binary for your platform from [GitHub Releases](https://github.com/frontmesh/nameforge/releases):
+
+**macOS (Apple Silicon)**:
+```bash
+curl -L https://github.com/frontmesh/nameforge/releases/latest/download/nameforge-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv nameforge /usr/local/bin/
+sudo mv nf /usr/local/bin/
+```
+
+**macOS (Intel)**:
+```bash
+curl -L https://github.com/frontmesh/nameforge/releases/latest/download/nameforge-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv nameforge /usr/local/bin/
+sudo mv nf /usr/local/bin/
+```
+
+**Linux (x86_64)**:
+```bash
+curl -L https://github.com/frontmesh/nameforge/releases/latest/download/nameforge-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv nameforge /usr/local/bin/
+sudo mv nf /usr/local/bin/
+```
+
+**Windows**: Download `nameforge-x86_64-pc-windows-msvc.zip` from releases and extract to your PATH.
+
+### 🍺 Option 2: Homebrew (macOS/Linux)
+
+```bash
+# Install from Homebrew (coming soon to homebrew-core)
+brew install nameforge
+```
+
+### 🦀 Option 3: Cargo (Build from Source)
+
+**Prerequisites**: Rust 1.70 or later
+
+```bash
+# Install from crates.io
+cargo install nameforge
+
+# Or install from GitHub (latest)
+cargo install --git https://github.com/frontmesh/nameforge
+```
+
+### 🐧 Option 4: Package Managers
+
+**Arch Linux (AUR)**:
+```bash
+# Coming soon
+yay -S nameforge
+```
+
+**Windows (Scoop)**:
+```bash
+# Coming soon
+scoop install nameforge
+```
+
+### Prerequisites (Optional)
+
 - **Ollama** (for AI content analysis) - Optional but recommended
 
-#### Installing Ollama (macOS)
+#### Installing Ollama
+
+**macOS**:
 ```bash
-# Install Ollama
 brew install ollama
-
-# Start Ollama service
 brew services start ollama
-
-# Pull a vision model
-ollama pull llava:13b
+ollama pull llava-llama3:latest
 ```
 
-### Install NameForge
+**Linux**:
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd nameforge
-
-# Install globally
-cargo install --path .
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama pull llava-llama3:latest
 ```
+
+**Windows**: Download from [ollama.ai](https://ollama.ai/download)
 
 ## 📖 Usage
 

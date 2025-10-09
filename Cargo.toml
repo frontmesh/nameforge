@@ -1,7 +1,23 @@
 [package]
 name = "nameforge"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT OR Apache-2.0"
+description = "Intelligent photo renaming tool with AI content analysis and GPS location resolution"
+readme = "README.md"
+homepage = "https://github.com/frontmesh/nameforge"
+repository = "https://github.com/frontmesh/nameforge"
+documentation = "https://github.com/frontmesh/nameforge"
+keywords = ["photo", "rename", "ai", "gps", "exif"]
+categories = ["command-line-utilities", "multimedia::images"]
+exclude = [
+    "/.github",
+    "/tests",
+    "*.jpg",
+    "*.jpeg",
+    "*.png"
+]
 
 [[bin]]
 name = "nameforge"
