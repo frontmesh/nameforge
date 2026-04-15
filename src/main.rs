@@ -1,21 +1,20 @@
+use clap::{ArgAction, Parser, Subcommand};
+use colored::*;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use clap::{Parser, Subcommand};
-use colored::*;
-
 
 #[derive(Parser, Debug)]
-#[command(name = "nameforge", author, version, about = "Rename images by context", long_about = None)]
+#[command(name = "nameforge", author, version, about = "Rename photos and videos by context", long_about = None)]
 struct Args {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    /// Path to the input file (for default processing)
+    /// Path to the input file or folder (folders are scanned recursively)
     #[arg(short, long, global = true)]
     input: Option<PathBuf>,
 
     /// Perform a dry run without making changes
-    #[arg(short,long, default_value_t = false, global = true)]
+    #[arg(short, long, default_value_t = false, global = true)]
     dry_run: bool,
 
     /// Organize photos into date-based folders (YYYY-MM-DD format)
@@ -62,7 +61,7 @@ struct Args {
 fn format_duration(duration: Duration) -> String {
     let total_secs = duration.as_secs();
     let millis = duration.subsec_millis();
-    
+
     if total_secs >= 60 {
         let mins = total_secs / 60;
         let secs = total_secs % 60;
@@ -77,21 +76,26 @@ fn format_duration(duration: Duration) -> String {
 fn display_completion_time(start_time: Instant) {
     let duration = start_time.elapsed();
     println!("{}", "─".repeat(50).bright_black());
-    println!("{}  {}{}", "⏱️".bright_cyan(), "Completed in: ".bright_cyan(), format_duration(duration).bright_white().bold());
+    println!(
+        "{}  {}{}",
+        "⏱️".bright_cyan(),
+        "Completed in: ".bright_cyan(),
+        format_duration(duration).bright_white().bold()
+    );
     println!();
 }
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Process images with AI content analysis (limited number of images)
+    /// Process media with AI content analysis (limited number of files)
     Prompt {
         /// Path to the input folder
         #[arg(short, long)]
         input: PathBuf,
 
-        /// Maximum number of images to process (optional, processes all if not specified)
-        #[arg(short = 'm', long)]
-        max_images: Option<usize>,
+        /// Maximum number of media files to process (optional, processes all if not specified)
+        #[arg(short = 'm', long = "max-media", alias = "max-images", action = ArgAction::Set)]
+        max_media: Option<usize>,
     },
 }
 
@@ -100,9 +104,9 @@ fn main() {
     let args = Args::parse();
 
     match &args.command {
-        Some(Commands::Prompt { input, max_images }) => {
+        Some(Commands::Prompt { input, max_media }) => {
             // For prompt command, force AI content analysis
-            display_prompt_config(&args, input, *max_images);
+            display_prompt_config(&args, input, *max_media);
             nameforge::process_folder(
                 input,
                 args.dry_run,
@@ -113,17 +117,17 @@ fn main() {
                 &args.ai_case,
                 &args.ai_language,
                 !args.full_timestamp,
-                *max_images, // Pass the optional max_images limit
+                *max_media, // Pass the optional max_media limit
                 args.use_file_date,
                 args.prefer_modified,
                 args.no_date,
             );
-            
+
             display_completion_time(start_time);
         }
         None => {
             // Default processing - require input argument
-            let input = args.input.as_ref().expect("Input path is required for default processing. Use --input or run 'nf prompt --input <path> --max-images <n>'");
+            let input = args.input.as_ref().expect("Input path is required for default processing. Use --input or run 'nf prompt --input <path> --max-media <n>'");
             display_config(&args, input);
             nameforge::process_folder(
                 input,
@@ -140,7 +144,7 @@ fn main() {
                 args.prefer_modified,
                 args.no_date,
             );
-            
+
             display_completion_time(start_time);
         }
     }
@@ -148,20 +152,28 @@ fn main() {
 
 /// Helper function to display mode status
 fn display_mode(dry_run: bool) -> colored::ColoredString {
-    if dry_run { "DRY RUN".bright_yellow().bold() } else { "LIVE".bright_red().bold() }
+    if dry_run {
+        "DRY RUN".bright_yellow().bold()
+    } else {
+        "LIVE".bright_red().bold()
+    }
 }
 
 /// Helper function to display enabled/disabled status
 fn display_enabled_status(enabled: bool) -> colored::ColoredString {
-    if enabled { "ENABLED".bright_green() } else { "DISABLED".bright_red() }
+    if enabled {
+        "ENABLED".bright_green()
+    } else {
+        "DISABLED".bright_red()
+    }
 }
 
 /// Helper function to display date format
 fn display_date_format(full_timestamp: bool) -> colored::ColoredString {
-    if full_timestamp { 
-        "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan() 
-    } else { 
-        "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold() 
+    if full_timestamp {
+        "FULL TIMESTAMP (YYYY-MM-DD_HH-MM-SS)".bright_cyan()
+    } else {
+        "DATE ONLY (YYYY-MM-DD)".bright_cyan().bold()
     }
 }
 
@@ -176,69 +188,148 @@ fn display_date_source(args: &Args) -> colored::ColoredString {
             "FILE CREATION".bright_green().bold()
         }
     } else {
-        "EXIF DATA".bright_cyan().bold()
+        "EXIF FOR IMAGES, FILE DATES FOR VIDEOS"
+            .bright_cyan()
+            .bold()
     }
 }
 
 /// Helper function to display AI settings
 fn display_ai_settings(args: &Args) {
     if args.ai_content {
-        println!("{}      {}", "🤖 AI Analysis:".bright_green(), "ENABLED".bright_green().bold());
-        println!("{}        {}", "   Model:".bright_blue(), args.ai_model.bright_white());
-        println!("{}    {}", "   Max chars:".bright_blue(), args.ai_max_chars.to_string().bright_white());
-        println!("{}         {}", "   Case:".bright_blue(), args.ai_case.bright_white());
-        println!("{}     {}", "   Language:".bright_blue(), args.ai_language.bright_white());
+        println!(
+            "{}      {}",
+            "🤖 AI Analysis:".bright_green(),
+            "ENABLED".bright_green().bold()
+        );
+        println!(
+            "{}        {}",
+            "   Model:".bright_blue(),
+            args.ai_model.bright_white()
+        );
+        println!(
+            "{}    {}",
+            "   Max chars:".bright_blue(),
+            args.ai_max_chars.to_string().bright_white()
+        );
+        println!(
+            "{}         {}",
+            "   Case:".bright_blue(),
+            args.ai_case.bright_white()
+        );
+        println!(
+            "{}     {}",
+            "   Language:".bright_blue(),
+            args.ai_language.bright_white()
+        );
+        println!("{}", "   Video files use filename fallback".bright_black());
     } else {
-        println!("{}      {}", "🤖 AI Analysis:".bright_green(), "DISABLED".bright_red());
-        println!("{}     {}", "   Using GPS location data instead".bright_black(), "");
+        println!(
+            "{}      {}",
+            "🤖 AI Analysis:".bright_green(),
+            "DISABLED".bright_red()
+        );
+        println!(
+            "{}",
+            "   Using GPS for images and filename fallback for videos".bright_black()
+        );
     }
 }
 
 /// Helper function to display common configuration settings
 fn display_common_config(args: &Args, input: &std::path::Path) {
-    println!("{}  {}", "📁 Input folder:".bright_green(), input.display().to_string().bright_white());
-    println!("{}   {}", "🔧 Mode:".bright_green(), display_mode(args.dry_run));
-    println!("{}  {}", "📅 Date folders:".bright_green(), display_enabled_status(args.organize_by_date));
-    println!("{}    {}", "📆 Date format:".bright_green(), display_date_format(args.full_timestamp));
-    println!("{}   {}", "📅 Date source:".bright_green(), display_date_source(args));
+    println!(
+        "{}    {}",
+        "📁 Input path:".bright_green(),
+        input.display().to_string().bright_white()
+    );
+    println!(
+        "{}   {}",
+        "🔎 Search:".bright_green(),
+        "RECURSIVE".bright_cyan().bold()
+    );
+    println!(
+        "{}   {}",
+        "🔧 Mode:".bright_green(),
+        display_mode(args.dry_run)
+    );
+    println!(
+        "{}  {}",
+        "📅 Date folders:".bright_green(),
+        display_enabled_status(args.organize_by_date)
+    );
+    println!(
+        "{}    {}",
+        "📆 Date format:".bright_green(),
+        display_date_format(args.full_timestamp)
+    );
+    println!(
+        "{}   {}",
+        "📅 Date source:".bright_green(),
+        display_date_source(args)
+    );
 }
 
 fn display_config(args: &Args, input: &std::path::Path) {
     println!("{}", "📸 NameForge Configuration".bright_cyan().bold());
     println!("{}", "─".repeat(50).bright_black());
-    
+
     display_common_config(args, input);
     display_ai_settings(args);
-    
+
     println!("{}", "─".repeat(50).bright_black());
     println!();
 }
 
-/// Helper function to display max images setting
-fn display_max_images(max_images: Option<usize>) -> colored::ColoredString {
-    match max_images {
+/// Helper function to display max media setting
+fn display_max_media(max_media: Option<usize>) -> colored::ColoredString {
+    match max_media {
         Some(n) => n.to_string().bright_cyan().bold(),
-        None => "ALL".bright_green().bold()
+        None => "ALL".bright_green().bold(),
     }
 }
 
 /// Helper function to display AI settings for prompt mode (always enabled)
 fn display_prompt_ai_settings(args: &Args) {
-    println!("{} {}", "🤖 AI Analysis:".bright_green(), "ENABLED".bright_green().bold());
-    println!("{} {}", "   Model:".bright_blue(), args.ai_model.bright_white());
-    println!("{} {}", "   Max chars:".bright_blue(), args.ai_max_chars.to_string().bright_white());
-    println!("{} {}", "   Case:".bright_blue(), args.ai_case.bright_white());
-    println!("{} {}", "   Language:".bright_blue(), args.ai_language.bright_white());
+    println!(
+        "{} {}",
+        "🤖 AI Analysis:".bright_green(),
+        "ENABLED".bright_green().bold()
+    );
+    println!(
+        "{} {}",
+        "   Model:".bright_blue(),
+        args.ai_model.bright_white()
+    );
+    println!(
+        "{} {}",
+        "   Max chars:".bright_blue(),
+        args.ai_max_chars.to_string().bright_white()
+    );
+    println!(
+        "{} {}",
+        "   Case:".bright_blue(),
+        args.ai_case.bright_white()
+    );
+    println!(
+        "{} {}",
+        "   Language:".bright_blue(),
+        args.ai_language.bright_white()
+    );
 }
 
-fn display_prompt_config(args: &Args, input: &std::path::Path, max_images: Option<usize>) {
+fn display_prompt_config(args: &Args, input: &std::path::Path, max_media: Option<usize>) {
     println!("{}", "🤖 NameForge - Prompt Mode".bright_magenta().bold());
     println!("{}", "─".repeat(50).bright_black());
-    
+
     display_common_config(args, input);
-    println!("{}  {}", "🎯 Max images:".bright_green(), display_max_images(max_images));
+    println!(
+        "{} {}",
+        "🎯 Max media:".bright_green(),
+        display_max_media(max_media)
+    );
     display_prompt_ai_settings(args);
-    
+
     println!("{}", "─".repeat(50).bright_black());
     println!();
 }

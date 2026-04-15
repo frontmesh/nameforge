@@ -1,7 +1,12 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, BufWriter}, path::PathBuf};
+use colored::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use colored::*;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, BufWriter},
+    path::PathBuf,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct GPSCache {
@@ -27,13 +32,20 @@ impl GPSCache {
             .and_then(|path| File::open(&path).ok())
             .map(BufReader::new)
             .and_then(|reader| serde_json::from_reader::<_, GPSCache>(reader).ok());
-            
+
         match cache {
             Some(loaded_cache) => {
-                println!("{}  {}{}", "💾".bright_green(), "Loaded GPS cache with ".bright_green(), format!("{} entries", loaded_cache.cache.len()).bright_white().bold());
+                println!(
+                    "{}  {}{}",
+                    "💾".bright_green(),
+                    "Loaded GPS cache with ".bright_green(),
+                    format!("{} entries", loaded_cache.cache.len())
+                        .bright_white()
+                        .bold()
+                );
                 loaded_cache
             }
-            None => GPSCache::new()
+            None => GPSCache::new(),
         }
     }
 
@@ -42,10 +54,21 @@ impl GPSCache {
             .and_then(|path| File::create(&path).ok())
             .map(BufWriter::new)
             .and_then(|writer| serde_json::to_writer_pretty(writer, &self).ok());
-            
+
         match result {
-            Some(_) => println!("{}  {}{}", "💾".bright_green(), "Saved GPS cache with ".bright_green(), format!("{} entries", self.cache.len()).bright_white().bold()),
-            None => eprintln!("{} {}", "❌".bright_red(), "Failed to save GPS cache".bright_red())
+            Some(_) => println!(
+                "{}  {}{}",
+                "💾".bright_green(),
+                "Saved GPS cache with ".bright_green(),
+                format!("{} entries", self.cache.len())
+                    .bright_white()
+                    .bold()
+            ),
+            None => eprintln!(
+                "{} {}",
+                "❌".bright_red(),
+                "Failed to save GPS cache".bright_red()
+            ),
         }
     }
 

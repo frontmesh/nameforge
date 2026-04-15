@@ -1,7 +1,7 @@
-use reqwest::blocking::Client;
-use serde::Deserialize;
 use crate::cache::GPSCache;
 use colored::*;
+use reqwest::blocking::Client;
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct NominatimResponse {
@@ -44,10 +44,10 @@ fn fetch_place_from_api(lat: f64, lon: f64) -> Option<String> {
         lat.to_string().bright_white(),
         lon.to_string().bright_white()
     );
-    
+
     let client = Client::new();
     let url = build_nominatim_url(lat, lon);
-    
+
     client
         .get(&url)
         .header("User-Agent", "nameforge/1.0")
@@ -59,17 +59,16 @@ fn fetch_place_from_api(lat: f64, lon: f64) -> Option<String> {
 
 pub fn gps_to_place(lat: f64, lon: f64, cache: &mut GPSCache) -> (Option<String>, bool) {
     let key = to_cache_key(lat, lon);
-    
+
     // Check cache first
     if let Some(place) = cache.get(&key) {
         return (Some(place.clone()), false);
     }
-    
-    // Try API request, fallback to "UnknownPlace" if it fails
-    let place = fetch_place_from_api(lat, lon)
-        .unwrap_or_else(|| "UnknownPlace".to_string());
-    
-    // Cache the result (whether successful or fallback)
+
+    let Some(place) = fetch_place_from_api(lat, lon) else {
+        return (None, false);
+    };
+
     cache.insert(key, place.clone());
     (Some(place), true)
 }

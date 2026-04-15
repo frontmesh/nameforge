@@ -1,21 +1,23 @@
 # 📸 NameForge (`nf`)
 
-**Intelligent photo renaming tool with AI content analysis, GPS location resolution, and smart organization.**
+**Intelligent media renaming tool with AI content analysis, GPS location resolution, and smart organization.**
 
-NameForge transforms your photo collection from generic filenames like `IMG_1234.jpg` into meaningful, contextual names like `2023-08-31_cozy_livingroom.jpg` using EXIF metadata, GPS coordinates, and AI-powered content analysis.
+NameForge transforms mixed photo and video libraries from generic filenames like `IMG_1234.JPG` and `MOV_1234.MP4` into meaningful, contextual names like `2023-08-31_cozy_livingroom.jpg` or `2023-08-31_video.mp4` using EXIF metadata, GPS coordinates, filesystem timestamps, and AI-powered content analysis.
 
 **Quick Start:** Use the convenient `nf` alias for faster commands!
 
 ## ✨ Features
 
-- 🤖 **AI Content Analysis** - Uses Ollama vision models to analyze photo content
+- 🤖 **AI Content Analysis** - Uses Ollama vision models to analyze still-image content
 - 🌍 **GPS Location Resolution** - Converts GPS coordinates to readable place names
-- 📅 **Date-based Organization** - Automatically sorts photos into date folders
+- 📅 **Date-based Organization** - Automatically sorts media into date folders
 - 💾 **Smart Caching** - Persistent GPS cache to avoid redundant API calls
 - 🎨 **Customizable Naming** - Multiple case formats and character limits
 - 🌈 **Beautiful UI** - Colorful, emoji-rich terminal interface
 - 🏃 **Dry Run Mode** - Preview changes before applying them
-- 📊 **Batch Processing** - Handle entire photo collections efficiently
+- 📂 **Recursive Discovery** - Scans nested folders automatically
+- 🎞️ **Mixed Media Support** - Handles common image and video formats in one pass
+- 📊 **Batch Processing** - Handle entire media collections efficiently
 
 ## 🚀 Installation
 
@@ -105,7 +107,7 @@ ollama pull llava-llama3:latest
 ### Basic Usage
 
 ```bash
-# Rename photos using GPS data (dry run) - uses date-only format by default
+# Rename media using GPS data for photos and filename fallback for videos (dry run)
 nf --input /path/to/photos --dry-run
 
 # Actually rename the files
@@ -155,7 +157,7 @@ nf --input /path/to/photos \
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--input` | Path to photo directory | Required |
+| `--input` | Path to file or folder (folders are scanned recursively) | Required |
 | `--dry-run` | Preview changes without applying | `false` |
 | `--organize-by-date` | Create date-based folder structure | `false` |
 | `--full-timestamp` | Use full timestamp instead of date-only | `false` |
@@ -167,12 +169,12 @@ nf --input /path/to/photos \
 
 ## 🎯 How It Works
 
-1. **📁 Scan Directory** - Finds all JPEG files in the specified directory
-2. **📊 Extract EXIF** - Reads metadata including date and GPS coordinates
-3. **🌍 Resolve Location** - Converts GPS coordinates to place names via OpenStreetMap
-4. **🤖 AI Analysis** - (Optional) Analyzes image content for descriptive naming
-5. **📝 Generate Names** - Creates meaningful filenames with timestamps and context
-6. **📂 Organize** - (Optional) Sorts into date-based folder structure
+1. **📁 Scan Input** - Recursively finds supported media files in the specified path
+2. **📊 Extract Metadata** - Reads EXIF metadata for photos and filesystem timestamps for videos
+3. **🌍 Resolve Location** - Converts photo GPS coordinates to place names via OpenStreetMap
+4. **🤖 AI Analysis** - (Optional) Analyzes still images for descriptive naming
+5. **📝 Generate Names** - Creates meaningful filenames with timestamps and context-aware fallbacks
+6. **📂 Organize** - (Optional) Sorts files into date-based folder structure
 
 ## 📋 Filename Format
 
@@ -238,7 +240,7 @@ NameForge automatically caches GPS lookups in `~/.nameforge_cache.json` to:
 NameForge features a beautiful, colorful terminal interface with:
 
 - 📸 **Configuration Display** - Shows all active settings
-- 📷 **Processing Indicators** - Visual progress through photo collection
+- 📷 **Processing Indicators** - Visual progress through media collection
 - 🌍 **GPS Resolution** - Real-time coordinate lookup feedback
 - 🤖 **AI Analysis** - Model processing status and results
 - ✨ **Results** - Highlighted filename generation

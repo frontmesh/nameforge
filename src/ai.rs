@@ -1,10 +1,10 @@
-use std::{path::Path, time::Duration};
-use reqwest::blocking::Client;
-use serde::{Deserialize, Serialize};
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use colored::*;
 use image::ImageFormat;
+use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 use std::io::Cursor;
+use std::{path::Path, time::Duration};
 
 #[derive(Serialize)]
 struct OllamaRequest {
@@ -59,7 +59,10 @@ fn capitalize_word(word: &str) -> String {
     let mut chars = word.chars();
     match chars.next() {
         None => String::new(),
-        Some(first) => first.to_ascii_uppercase().to_string() + &chars.map(|c| c.to_ascii_lowercase()).collect::<String>(),
+        Some(first) => {
+            first.to_ascii_uppercase().to_string()
+                + &chars.map(|c| c.to_ascii_lowercase()).collect::<String>()
+        }
     }
 }
 
@@ -67,7 +70,7 @@ fn to_snake_case(input: &str) -> String {
     let mut result = String::new();
     let mut prev_was_upper = false;
     let mut prev_was_separator = false;
-    
+
     for (i, ch) in input.chars().enumerate() {
         if ch.is_ascii_uppercase() {
             // Add underscore before uppercase letter if previous wasn't uppercase and we're not at start
@@ -91,12 +94,12 @@ fn to_snake_case(input: &str) -> String {
         }
         // Skip other special characters
     }
-    
+
     // Remove trailing underscore if present
     if result.ends_with('_') {
         result.pop();
     }
-    
+
     result
 }
 
@@ -134,7 +137,7 @@ fn calculate_resize_dimensions(width: u32, height: u32, max_size: u32) -> (u32, 
         let ratio = max_size as f32 / width.max(height) as f32;
         (
             (width as f32 * ratio) as u32,
-            (height as f32 * ratio) as u32
+            (height as f32 * ratio) as u32,
         )
     }
 }
@@ -150,7 +153,7 @@ fn encode_image_to_jpeg(img: image::DynamicImage) -> Result<Vec<u8>, Box<dyn std
 /// Resize image to reduce memory usage while maintaining aspect ratio
 fn resize_image_for_ai(image_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     const MAX_SIZE: u32 = 1024;
-    
+
     let img = image::open(image_path)?;
     let (width, height) = (img.width(), img.height());
     let (new_width, new_height) = calculate_resize_dimensions(width, height, MAX_SIZE);
@@ -160,8 +163,13 @@ fn resize_image_for_ai(image_path: &Path) -> Result<Vec<u8>, Box<dyn std::error:
 
 /// Helper function to prepare image for AI processing
 fn prepare_image_for_ai(image_path: &Path) -> Option<String> {
-    println!("{}  {}{}", "🖼️".bright_blue(), "Resizing image for AI processing...".bright_blue(), "");
-    
+    println!(
+        "{}  {}{}",
+        "🖼️".bright_blue(),
+        "Resizing image for AI processing...".bright_blue(),
+        ""
+    );
+
     resize_image_for_ai(image_path)
         .map(|buffer| general_purpose::STANDARD.encode(&buffer))
         .map_err(|e| {
@@ -206,7 +214,11 @@ fn create_ai_client() -> Client {
 }
 
 /// Helper function to process successful AI response
-fn process_ai_response(response: reqwest::blocking::Response, case: &str, max_chars: u32) -> Option<String> {
+fn process_ai_response(
+    response: reqwest::blocking::Response,
+    case: &str,
+    max_chars: u32,
+) -> Option<String> {
     if !response.status().is_success() {
         eprintln!(
             "{} {}{}{}  {}{}",
@@ -219,22 +231,29 @@ fn process_ai_response(response: reqwest::blocking::Response, case: &str, max_ch
         );
         return None;
     }
-    
-    let ollama_response: OllamaResponse = response.json().map_err(|e| {
-        eprintln!(
-            "{} {}{}",
-            "❌".bright_red(),
-            "Failed to parse Ollama response: ".bright_red(),
-            e.to_string().bright_white()
-        );
-    }).ok()?;
-    
+
+    let ollama_response: OllamaResponse = response
+        .json()
+        .map_err(|e| {
+            eprintln!(
+                "{} {}{}",
+                "❌".bright_red(),
+                "Failed to parse Ollama response: ".bright_red(),
+                e.to_string().bright_white()
+            );
+        })
+        .ok()?;
+
     let filename = ollama_response.response.trim();
     if filename.is_empty() {
-        eprintln!("{} {}", "❌".bright_red(), "Ollama returned empty response".bright_red());
+        eprintln!(
+            "{} {}",
+            "❌".bright_red(),
+            "Ollama returned empty response".bright_red()
+        );
         return None;
     }
-    
+
     let filename = apply_case_conversion(filename, case);
     println!(
         "{}  {}{}{}{}",
@@ -244,7 +263,7 @@ fn process_ai_response(response: reqwest::blocking::Response, case: &str, max_ch
         filename.bright_green().bold(),
         "'".bright_white()
     );
-    
+
     Some(if filename.len() > max_chars as usize {
         filename.chars().take(max_chars as usize).collect()
     } else {
@@ -253,7 +272,12 @@ fn process_ai_response(response: reqwest::blocking::Response, case: &str, max_ch
 }
 
 /// Helper function to attempt AI request with retry logic
-fn attempt_ai_request(client: &Client, request: &OllamaRequest, case: &str, max_chars: u32) -> Option<String> {
+fn attempt_ai_request(
+    client: &Client,
+    request: &OllamaRequest,
+    case: &str,
+    max_chars: u32,
+) -> Option<String> {
     println!(
         "{}  {}{}{}",
         "🤖".bright_magenta(),
@@ -261,9 +285,13 @@ fn attempt_ai_request(client: &Client, request: &OllamaRequest, case: &str, max_
         request.model.bright_white().bold(),
         "...".bright_magenta()
     );
-    
+
     for attempt in 1..=2 {
-        match client.post("http://localhost:11434/api/generate").json(request).send() {
+        match client
+            .post("http://localhost:11434/api/generate")
+            .json(request)
+            .send()
+        {
             Ok(response) => {
                 if attempt > 1 {
                     println!(
@@ -309,14 +337,14 @@ pub fn get_ai_content_name(
     let base64_image = prepare_image_for_ai(image_path)?;
     let client = create_ai_client();
     let prompt = build_ai_prompt(case, max_chars, language);
-    
+
     let request = OllamaRequest {
         model: model.to_string(),
         prompt,
         images: vec![base64_image],
         stream: false,
     };
-    
+
     attempt_ai_request(&client, &request, case, max_chars)
 }
 
@@ -342,14 +370,38 @@ mod tests {
 
     #[test]
     fn test_apply_case_conversion() {
-        assert_eq!(apply_case_conversion("cat on carpet", "snake_case"), "cat_on_carpet");
-        assert_eq!(apply_case_conversion("cat on carpet", "snakecase"), "cat_on_carpet");
-        assert_eq!(apply_case_conversion("cat on carpet", "lowercase"), "cat_on_carpet");
-        assert_eq!(apply_case_conversion("cat on carpet", "uppercase"), "CAT_ON_CARPET");
-        assert_eq!(apply_case_conversion("cat on carpet", "camelcase"), "catOnCarpet");
-        assert_eq!(apply_case_conversion("cat on carpet", "pascalcase"), "CatOnCarpet");
-        assert_eq!(apply_case_conversion("cat on carpet", "kebabcase"), "cat-on-carpet");
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "snake_case"),
+            "cat_on_carpet"
+        );
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "snakecase"),
+            "cat_on_carpet"
+        );
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "lowercase"),
+            "cat_on_carpet"
+        );
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "uppercase"),
+            "CAT_ON_CARPET"
+        );
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "camelcase"),
+            "catOnCarpet"
+        );
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "pascalcase"),
+            "CatOnCarpet"
+        );
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "kebabcase"),
+            "cat-on-carpet"
+        );
         // Unknown case should default to snake_case
-        assert_eq!(apply_case_conversion("cat on carpet", "unknown"), "cat_on_carpet");
+        assert_eq!(
+            apply_case_conversion("cat on carpet", "unknown"),
+            "cat_on_carpet"
+        );
     }
 }
