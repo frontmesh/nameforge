@@ -58,5 +58,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
       - name: Security audit
-        uses: actions-rs/audit@v1
+        uses: actions-rust-lang/audit@v1
+        with:
+          createIssues: false

@@ -107,21 +107,21 @@ fn main() {
         Some(Commands::Prompt { input, max_media }) => {
             // For prompt command, force AI content analysis
             display_prompt_config(&args, input, *max_media);
-            nameforge::process_folder(
-                input,
-                args.dry_run,
-                args.organize_by_date,
-                true, // Force AI content analysis for prompt command
-                &args.ai_model,
-                args.ai_max_chars,
-                &args.ai_case,
-                &args.ai_language,
-                !args.full_timestamp,
-                *max_media, // Pass the optional max_media limit
-                args.use_file_date,
-                args.prefer_modified,
-                args.no_date,
-            );
+            let options = nameforge::ProcessingOptions {
+                dry_run: args.dry_run,
+                organize_by_date: args.organize_by_date,
+                ai_content: true,
+                ai_model: &args.ai_model,
+                ai_max_chars: args.ai_max_chars,
+                ai_case: &args.ai_case,
+                ai_language: &args.ai_language,
+                date_only: !args.full_timestamp,
+                max_media: *max_media,
+                use_file_date: args.use_file_date,
+                prefer_modified: args.prefer_modified,
+                no_date: args.no_date,
+            };
+            nameforge::process_folder(input, &options);
 
             display_completion_time(start_time);
         }
@@ -129,21 +129,21 @@ fn main() {
             // Default processing - require input argument
             let input = args.input.as_ref().expect("Input path is required for default processing. Use --input or run 'nf prompt --input <path> --max-media <n>'");
             display_config(&args, input);
-            nameforge::process_folder(
-                input,
-                args.dry_run,
-                args.organize_by_date,
-                args.ai_content,
-                &args.ai_model,
-                args.ai_max_chars,
-                &args.ai_case,
-                &args.ai_language,
-                !args.full_timestamp,
-                None, // No limit for default processing
-                args.use_file_date,
-                args.prefer_modified,
-                args.no_date,
-            );
+            let options = nameforge::ProcessingOptions {
+                dry_run: args.dry_run,
+                organize_by_date: args.organize_by_date,
+                ai_content: args.ai_content,
+                ai_model: &args.ai_model,
+                ai_max_chars: args.ai_max_chars,
+                ai_case: &args.ai_case,
+                ai_language: &args.ai_language,
+                date_only: !args.full_timestamp,
+                max_media: None,
+                use_file_date: args.use_file_date,
+                prefer_modified: args.prefer_modified,
+                no_date: args.no_date,
+            };
+            nameforge::process_folder(input, &options);
 
             display_completion_time(start_time);
         }

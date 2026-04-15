@@ -18,7 +18,10 @@ All notable changes to this project should be tracked in this file.
 - Files without usable GPS or AI results now fall back to sanitized original stems when they are meaningful, instead of defaulting to placeholders like `NoGPS`.
 - Collision checks now run against the real destination folder, which fixes date-folder moves and avoids forcing `_1` onto files that are already correctly named.
 - CLI help text and README examples now describe recursive scanning and mixed-media behavior.
+- Processing options are now passed through typed structs instead of long argument lists, which keeps the rename pipeline clippy-clean.
 
 ### Fixed
 
 - GPS cache entries are only written for successful lookups instead of persisting failed `UnknownPlace` results.
+- CI now uses a maintained Rust audit action instead of the broken `actions-rs/audit` reference.
+- Clippy failures from redundant imports, literal formatting, and manual error inspection were removed.

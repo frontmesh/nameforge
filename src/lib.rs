@@ -25,6 +25,21 @@ const GENERIC_CAMERA_PREFIXES: &[&str] = &[
     "img", "dsc", "mov", "mvi", "vid", "pxl", "dji", "imgp", "gopr", "gp", "mvimg",
 ];
 
+pub struct ProcessingOptions<'a> {
+    pub dry_run: bool,
+    pub organize_by_date: bool,
+    pub ai_content: bool,
+    pub ai_model: &'a str,
+    pub ai_max_chars: u32,
+    pub ai_case: &'a str,
+    pub ai_language: &'a str,
+    pub date_only: bool,
+    pub max_media: Option<usize>,
+    pub use_file_date: bool,
+    pub prefer_modified: bool,
+    pub no_date: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MediaKind {
     Image,
@@ -153,21 +168,7 @@ fn collect_media_files_from_dir(
     Ok(())
 }
 
-pub fn process_folder(
-    input_path: &Path,
-    dry_run: bool,
-    organize_by_date: bool,
-    ai_content: bool,
-    ai_model: &str,
-    ai_max_chars: u32,
-    ai_case: &str,
-    ai_language: &str,
-    date_only: bool,
-    max_images: Option<usize>,
-    use_file_date: bool,
-    prefer_modified: bool,
-    no_date: bool,
-) {
+pub fn process_folder(input_path: &Path, options: &ProcessingOptions<'_>) {
     let media_files = match collect_media_files(input_path) {
         Ok(files) => files,
         Err(error) => {
@@ -210,7 +211,8 @@ pub fn process_folder(
     let mut processed_count = 0;
 
     for media_file in media_files {
-        if max_images
+        if options
+            .max_media
             .map(|max| processed_count >= max)
             .unwrap_or(false)
         {
@@ -218,7 +220,7 @@ pub fn process_folder(
                 "{}  {}{}{}",
                 "🎯".bright_cyan(),
                 "Reached maximum file limit of ".bright_cyan(),
-                max_images.unwrap().to_string().bright_white().bold(),
+                options.max_media.unwrap().to_string().bright_white().bold(),
                 ". Stopping processing.".bright_cyan()
             );
             break;
@@ -232,26 +234,14 @@ pub fn process_folder(
             format!(" file: {}", media_file.path.display()).bright_blue()
         );
 
-        if let Some(rename_plan) = build_rename_plan(
-            &media_file,
-            &mut gps_cache,
-            ai_content,
-            ai_model,
-            ai_max_chars,
-            ai_case,
-            ai_language,
-            date_only,
-            use_file_date,
-            prefer_modified,
-            no_date,
-        ) {
+        if let Some(rename_plan) = build_rename_plan(&media_file, &mut gps_cache, options) {
             cache_updated |= rename_plan.gps_cache_updated;
 
             let target_folder = get_target_folder(
                 &media_file.path,
                 &base_folder,
                 rename_plan.date_folder.as_deref(),
-                organize_by_date,
+                options.organize_by_date,
             );
             let Some(new_name) = unique_filename(
                 &target_folder,
@@ -274,12 +264,12 @@ pub fn process_folder(
                 &base_folder,
                 rename_plan.date_folder.as_deref(),
                 &new_name,
-                organize_by_date,
+                options.organize_by_date,
             );
 
             if media_file.path == new_path {
                 print_skip_info(&media_file.path);
-            } else if dry_run {
+            } else if options.dry_run {
                 print_dry_run_info(&media_file.path, &new_path);
             } else if let Err(error) = execute_rename(&media_file.path, &new_path) {
                 eprintln!(
@@ -352,15 +342,11 @@ fn get_media_date_string(
 fn resolve_content_part(
     media_file: &MediaFile,
     cache: &mut GPSCache,
-    ai_content: bool,
-    ai_model: &str,
-    ai_max_chars: u32,
-    ai_case: &str,
-    ai_language: &str,
+    options: &ProcessingOptions<'_>,
     exif_opt: &Option<::exif::Exif>,
 ) -> (String, bool) {
-    if ai_content {
-        return resolve_ai_content_part(media_file, ai_model, ai_max_chars, ai_case, ai_language);
+    if options.ai_content {
+        return resolve_ai_content_part(media_file, options);
     }
 
     if media_file.kind == MediaKind::Image {
@@ -381,10 +367,7 @@ fn resolve_content_part(
 
 fn resolve_ai_content_part(
     media_file: &MediaFile,
-    ai_model: &str,
-    ai_max_chars: u32,
-    ai_case: &str,
-    ai_language: &str,
+    options: &ProcessingOptions<'_>,
 ) -> (String, bool) {
     if media_file.kind == MediaKind::Video {
         eprintln!(
@@ -402,10 +385,10 @@ fn resolve_ai_content_part(
 
     let content = generate_ai_content(
         &media_file.path,
-        ai_model,
-        ai_max_chars,
-        ai_case,
-        ai_language,
+        options.ai_model,
+        options.ai_max_chars,
+        options.ai_case,
+        options.ai_language,
     )
     .unwrap_or_else(|| fallback_name_from_path(&media_file.path, media_file.kind));
 
@@ -522,7 +505,7 @@ fn print_dry_run_info(original_path: &Path, new_path: &Path) {
 fn execute_rename(original_path: &Path, new_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = new_path.parent() {
         if !parent.exists() {
-            fs::create_dir_all(parent).map_err(|error| {
+            fs::create_dir_all(parent).inspect_err(|error| {
                 eprintln!(
                     "{} {}{}{}  {}{}",
                     "❌".bright_red(),
@@ -532,7 +515,6 @@ fn execute_rename(original_path: &Path, new_path: &Path) -> Result<(), Box<dyn s
                     "Error: ".bright_red(),
                     error.to_string().bright_white()
                 );
-                error
             })?;
         }
     }
@@ -564,31 +546,23 @@ fn execute_rename(original_path: &Path, new_path: &Path) -> Result<(), Box<dyn s
 fn build_rename_plan(
     media_file: &MediaFile,
     cache: &mut GPSCache,
-    ai_content: bool,
-    ai_model: &str,
-    ai_max_chars: u32,
-    ai_case: &str,
-    ai_language: &str,
-    date_only: bool,
-    use_file_date: bool,
-    prefer_modified: bool,
-    no_date: bool,
+    options: &ProcessingOptions<'_>,
 ) -> Option<RenamePlan> {
     let exif_opt = if media_file.kind == MediaKind::Image {
         read_exif_data(&media_file.path)
     } else {
         None
     };
-    let date_prefix = if no_date {
+    let date_prefix = if options.no_date {
         None
     } else {
         get_media_date_string(
             media_file.kind,
             &media_file.path,
             &exif_opt,
-            date_only,
-            use_file_date,
-            prefer_modified,
+            options.date_only,
+            options.use_file_date,
+            options.prefer_modified,
         )
     };
     let date_folder = get_media_date_string(
@@ -596,20 +570,12 @@ fn build_rename_plan(
         &media_file.path,
         &exif_opt,
         true,
-        use_file_date,
-        prefer_modified,
+        options.use_file_date,
+        options.prefer_modified,
     );
     let extension = media_file.path.extension()?.to_str()?.to_string();
-    let (content_part, gps_cache_updated) = resolve_content_part(
-        media_file,
-        cache,
-        ai_content,
-        ai_model,
-        ai_max_chars,
-        ai_case,
-        ai_language,
-        &exif_opt,
-    );
+    let (content_part, gps_cache_updated) =
+        resolve_content_part(media_file, cache, options, &exif_opt);
     let base_name = create_base_filename(date_prefix, content_part);
 
     Some(RenamePlan {

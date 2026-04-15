@@ -164,10 +164,9 @@ fn resize_image_for_ai(image_path: &Path) -> Result<Vec<u8>, Box<dyn std::error:
 /// Helper function to prepare image for AI processing
 fn prepare_image_for_ai(image_path: &Path) -> Option<String> {
     println!(
-        "{}  {}{}",
+        "{}  {}",
         "🖼️".bright_blue(),
-        "Resizing image for AI processing...".bright_blue(),
-        ""
+        "Resizing image for AI processing...".bright_blue()
     );
 
     resize_image_for_ai(image_path)
